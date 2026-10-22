@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>하이 앤 로우 프로토타입</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efe3d8; --surface:#fffaf4; --surface-2:#f4e8dd; --line:#dbc6b6;
+  --text:#2a1513; --muted:#7a5d55; --ivory:#fffdf6; --ink:#2a1513;
+  --blue:#2c5a98; --yellow:#c99419; --pos:#2c8553; --neg:#bf3d2c; --focus:#2c5a98;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#221010; --surface:#311819; --surface-2:#3d2022; --line:#5a3133;
+    --text:#f3e7e1; --muted:#b99c94; --ivory:#f4ead6; --ink:#2a1513;
+    --blue:#3a6cb0; --yellow:#dba932; --pos:#72c592; --neg:#ec6a5c; --focus:#dba932;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#221010; --surface:#311819; --surface-2:#3d2022; --line:#5a3133;
+  --text:#f3e7e1; --muted:#b99c94; --ivory:#f4ead6; --ink:#2a1513;
+  --blue:#3a6cb0; --yellow:#dba932; --pos:#72c592; --neg:#ec6a5c; --focus:#dba932;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 "IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+h1{font-family:"Black Han Sans","IBM Plex Sans KR",sans-serif;font-weight:400;font-size:30px;line-height:1;margin:0;letter-spacing:.5px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:500}
+.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:700}
+.btn:disabled{opacity:.4;cursor:default}
+
+.stage{display:flex;gap:18px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.score{flex:none;width:104px;height:144px;border-radius:12px;background:var(--ivory);color:var(--ink);display:grid;place-items:center;box-shadow:0 2px 0 var(--line);border:1px solid var(--line)}
+.score b{font-family:"Black Han Sans",sans-serif;font-weight:400;font-size:52px;line-height:1}
+.score.pos b{color:#2c8553}.score.neg b{color:#bf3d2c}
+.info{min-width:0}
+.round{font-weight:700;font-size:18px}
+.rule{color:var(--muted);margin:2px 0 8px}
+.result{font-weight:700;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.chip.pos{color:var(--pos)}.chip.neg{color:var(--neg)}
+.note{font-size:13px;color:var(--muted);margin-top:6px}
+
+.seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+@media (min-width:760px){.seats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.seat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.seat.turn{border-color:var(--text);box-shadow:0 0 0 2px var(--text) inset}
+.seat-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.name{font-weight:700}
+.total{font-family:"Black Han Sans",sans-serif;font-size:24px;line-height:1}
+.tags{display:flex;gap:4px;flex-wrap:wrap;font-size:12px}
+.tag{padding:1px 7px;border-radius:6px;background:var(--surface-2);color:var(--muted)}
+.tag.on{background:var(--text);color:var(--bg)}
+.slot{height:84px;display:flex;align-items:center;justify-content:center;gap:8px}
+.card{width:58px;height:80px;border-radius:9px;display:grid;place-items:center;position:relative;flex:none}
+.card.empty{border:2px dashed var(--line)}
+.card.back{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.18) 0 6px,transparent 6px 12px)}
+.card.back.blue{background-color:var(--blue)}
+.card.back.yellow{background-color:var(--yellow)}
+.card.back.unknown{background-color:var(--muted)}
+.card.face{background:var(--ivory);color:var(--ink);border:1px solid var(--line);border-top:7px solid var(--c)}
+.card.face b{font-family:"Black Han Sans",sans-serif;font-weight:400;font-size:34px;line-height:1}
+.card .lab{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;padding:0 6px;border-radius:5px;background:var(--text);color:var(--bg);white-space:nowrap}
+.stack{position:relative;width:88px;height:84px}
+.stack .card{position:absolute;left:0;top:2px;z-index:2}
+.spcard{position:absolute;right:0;top:12px;width:46px;height:64px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:700;z-index:1;border:1px solid var(--line)}
+.spcard b{font-size:22px;line-height:1}
+.spcard.down{background:var(--surface-2);background-image:repeating-linear-gradient(-45deg,var(--line) 0 2px,transparent 2px 8px)}
+.spcard.norm{background:var(--ivory);color:var(--ink)}
+.spcard.rev{background:var(--neg);color:#fff;border-color:var(--neg)}
+.specials{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.spc{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--ivory);color:var(--ink);font-weight:700}
+.spc b{font-size:24px;line-height:1.1}
+.spc small{font-size:12px;font-weight:400;opacity:.85}
+.spc.rev{background:var(--neg);color:#fff;border-color:var(--neg)}
+.spc.sel{box-shadow:0 0 0 3px var(--text)}
+.spc:disabled{opacity:.3;cursor:default}
+.tag.rv{background:var(--neg);color:#fff}
+.btn.revbtn{background:var(--neg);color:#fff;border-color:var(--neg);font-weight:700}
+.enter{animation:flip .35s ease-out}
+@keyframes flip{from{transform:rotateY(90deg)}to{transform:none}}
+.won{display:flex;gap:4px;flex-wrap:wrap;min-height:22px}
+.used{font-size:12px;color:var(--muted)}
+
+.action{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:5}
+.prompt{font-weight:700;margin-bottom:10px}
+.sub{color:var(--muted);font-size:14px;margin:-6px 0 10px}
+.hand{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px}
+@media (min-width:760px){.hand{grid-template-columns:repeat(10,1fr)}}
+.hc{height:62px;border-radius:9px;border:1px solid var(--line);background:var(--ivory);color:var(--ink);border-top:6px solid var(--c);font-family:"Black Han Sans",sans-serif;font-size:26px}
+.hc.sel{box-shadow:0 0 0 3px var(--text);transform:translateY(-3px)}
+.hc:disabled{opacity:.25;text-decoration:line-through;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toggle[aria-pressed="true"]{background:var(--neg);color:#fff;border-color:var(--neg)}
+.standings{display:grid;gap:6px;margin-bottom:12px}
+.st{display:flex;justify-content:space-between;padding:8px 10px;border-radius:10px;background:var(--surface-2)}
+.st.alive{outline:2px solid var(--pos)}
+
+.log{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
+.log h2,.rules summary{font-size:16px;margin:0 0 6px}
+.log ol{margin:0;padding-left:20px;font-size:14px}
+.log li{margin-bottom:4px}
+.rules{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;font-size:14px}
+.rules summary{font-weight:700;cursor:pointer}
+.rules ul{padding-left:20px;margin:8px 0 0}
+@media (prefers-reduced-motion:reduce){.enter{animation:none}.hc.sel{transform:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>하이 앤 로우</h1>
+    <button class="btn" data-act="new">새 게임</button>
+  </header>
+  <div id="app"></div>
+  <details class="rules">
+    <summary>규칙 요약</summary>
+    <ul>
+      <li>각자 숫자 카드 1~10(1~5 파랑, 6~10 노랑)과 특수 카드 노멀(=), 리버스(↺)를 가지고 9라운드를 진행해요.</li>
+      <li>점수 카드는 +2, +4, +6, +8, +10, −1, −3, −5, −7, −9 중 1장을 빼고 매 라운드 1장씩 공개돼요.</li>
+      <li>매 라운드 숫자 카드 1장과 특수 카드 1장을 겹쳐 내요. 특수 카드는 판정 직전에 한꺼번에 공개돼요. 리버스는 게임당 1번만 낼 수 있고, 나머지 라운드는 노멀을 내요.</li>
+      <li>리버스가 홀수 장이면 낮은 숫자가, 아니면 높은 숫자가 우위예요. 공개를 포기한 사람의 리버스도 계산에 들어가요.</li>
+      <li>카드 뒷면 색을 먼저 보여준 뒤 선부터 차례로 앞면을 공개해요. 라운드당 1명만 공개를 포기할 수 있고, 선과 직전 라운드 포기자는 포기할 수 없어요. 포기해도 카드는 사용한 것으로 처리돼요.</li>
+      <li>혼자 낸 숫자 중 가장 우위인 카드가 점수 카드를 가져가요. 겹친 숫자는 건너뛰고, 모두 겹치면 점수 카드는 버려져요.</li>
+      <li>양수 카드: 공개를 포기한 사람은 획득 후보에서 빠져요.</li>
+      <li>음수 카드: 공개를 포기한 사람이 있으면 그 사람이 가져가요. 같은 숫자를 낸 사람들이 있으면, 가져간 사람이 그중 한 명에게 넘겨야 해요.</li>
+      <li>9라운드 후 점수가 높은 2명이 생존해요. 동점이면 더 높은 점수 카드를 가진 사람이 이겨요.</li>
+    </ul>
+  </details>
+</div>
+<script>
+const NAMES=['나','봇 A','봇 B','봇 C'];
+const SCORE_SET=[10,8,6,4,2,-1,-3,-5,-7,-9];
+const REDUCED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep=ms=>new Promise(r=>setTimeout(r,REDUCED?ms*0.4:ms));
+const range=(a,b)=>Array.from({length:b-a+1},(_,i)=>a+i);
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+const col=n=>n<=5?'blue':'yellow';
+const fmt=v=>v>0?'+'+v:'−'+Math.abs(v);
+const sum=a=>a.reduce((x,y)=>x+y,0);
+const nm=i=>S.players[i].name;
+const own=i=>S.mode==='solo'&&i===0;
+
+let S=null,pending=null,ui={sel:null,rev:false},gameId=0,prev=[];
+
+/* ---------- 엔진 ---------- */
+function resolve(card,subs,folder,lowWins){
+  const revealed=[0,1,2,3].filter(i=>i!==folder);
+  const freq={};
+  revealed.forEach(i=>{freq[subs[i].num]=(freq[subs[i].num]||0)+1;});
+  const tiedAll=revealed.filter(i=>freq[subs[i].num]>1);
+  let acquirer=null;
+  if(card<0&&folder!==null){acquirer=folder;}
+  else{
+    const uniq=revealed.filter(i=>freq[subs[i].num]===1);
+    uniq.sort((a,b)=>lowWins?subs[a].num-subs[b].num:subs[b].num-subs[a].num);
+    if(uniq.length) acquirer=uniq[0];
+  }
+  const tied=(card<0&&acquirer!==null)?tiedAll.filter(i=>i!==acquirer):[];
+  return {acquirer,tied};
+}
+
+/* ---------- 봇 ---------- */
+function pool(j){const seen=new Set(S.players[j].shown);return range(1,10).filter(n=>!seen.has(n));}
+function revP(j){const p=S.players[j];if(p.revUsed)return 0;return Math.min(0.5,0.6/(9-S.round));}
+function payoff(card,res,i){
+  if(res.acquirer===null)return 0;
+  if(card>0)return res.acquirer===i?card:0;
+  if(res.acquirer===i)return res.tied.length?0:card;
+  if(res.tied.includes(i))return card/res.tied.length;
+  return 0;
+}
+function cost(k,n,rev){
+  const left=8-S.round; if(left<=0)return 0;
+  const f=left/8;
+  return k*(Math.abs(n-5.5)-0.5)*f+(rev?2.0*f:0);
+}
+function opts(j,pl){const o=[];pl.forEach(n=>{o.push({num:n,rev:false});if(!S.players[j].revUsed)o.push({num:n,rev:true});});return o;}
+/* 상대 모델: 공개 정보만으로 각 플레이어가 합리적으로 낼 법한 카드 분포를 추정 */
+function oppModel(j){
+  const card=S.current,os=opts(j,pool(j)),others=[0,1,2,3].filter(x=>x!==j),pools=others.map(pool),rps=others.map(revP),N=150;
+  const ev=os.map(o=>{let t=0;for(let k=0;k<N;k++){const subs=[];subs[j]=o;others.forEach((x,y)=>{const p=pools[y];subs[x]={num:p[Math.floor(Math.random()*p.length)],rev:Math.random()<rps[y]};});const low=subs.filter(s=>s.rev).length%2===1;t+=payoff(card,resolve(card,subs,null,low),j);}return t/N-cost(0.65,o.num,o.rev);});
+  const m=Math.max(...ev),w=ev.map(v=>Math.exp((v-m)/0.8)),W=sum(w);
+  const cum=[];let a=0;w.forEach(v=>{a+=v/W;cum.push(a);});
+  return {os,cum};
+}
+function sampleModel(m){const r=Math.random();for(let i=0;i<m.cum.length;i++)if(r<=m.cum[i])return m.os[i];return m.os[m.os.length-1];}
+function botChoose(i){
+  const p=S.players[i],card=S.current,N=500;
+  const os=opts(i,p.hand);
+  const others=[0,1,2,3].filter(j=>j!==i),ms=others.map(j=>S.table.models[j]);
+  let best=os[0],bestV=-Infinity;
+  for(const o of os){
+    let tot=0;
+    for(let k=0;k<N;k++){
+      const subs=[];subs[i]=o;
+      others.forEach((j,x)=>{subs[j]=sampleModel(ms[x]);});
+      const low=subs.filter(s=>s.rev).length%2===1;
+      tot+=payoff(card,resolve(card,subs,null,low),i);
+    }
+    const v=tot/N-cost(p.k,o.num,o.rev)+(Math.random()-0.5)*p.noise;
+    if(v>bestV){bestV=v;best=o;}
+  }
+  return best;
+}
+function botFold(i){
+  const t=S.table,card=S.current,p=S.players[i];
+  const faced=[0,1,2,3].filter(j=>t.state[j]==='face');
+  if(card<0){
+    const nums=faced.map(j=>t.subs[j].num);
+    return nums.some((n,x)=>nums.indexOf(n)!==x);
+  }
+  const N=300;let wins=0;
+  for(let k=0;k<N;k++){
+    const subs=[];
+    for(let j=0;j<4;j++){
+      if(j===i){subs[j]=t.subs[i];continue;}
+      const rev=Math.random()<revP(j);
+      if(t.state[j]==='face'){subs[j]={num:t.subs[j].num,rev};}
+      else{
+        const c=col(t.subs[j].num);
+        let pl=pool(j).filter(n=>col(n)===c);if(!pl.length)pl=pool(j);
+        subs[j]={num:pl[Math.floor(Math.random()*pl.length)],rev};
+      }
+    }
+    const low=subs.filter(s=>s.rev).length%2===1;
+    if(resolve(card,subs,null,low).acquirer===i)wins++;
+  }
+  return wins/N<0.1&&Math.random()<p.foldRate;
+}
+function botGive(tied){
+  const tot=tied.map(j=>sum(S.players[j].cards));
+  const m=Math.max(...tot);const c=tied.filter((j,x)=>tot[x]===m);
+  return c[Math.floor(Math.random()*c.length)];
+}
+
+/* ---------- 진행 ---------- */
+function showStart(){
+  gameId++;pending=null;S=null;
+  document.getElementById('app').innerHTML=`<section class="action"><div class="prompt">누구랑 할까요?</div><div class="sub">둘이서 모드는 폰 하나를 번갈아 보며 해요. 빈자리 2개는 봇이 채워요.</div><div class="row"><button class="btn primary" data-act="mode" data-m="solo">봇 3명과</button><button class="btn primary" data-act="mode" data-m="duo">둘이서 (폰 하나)</button></div></section>`;
+}
+function newGame(mode){
+  gameId++;
+  const deck=shuffle(SCORE_SET);const excluded=deck.pop();
+  const names=mode==='duo'?['나','와이프','봇 A','봇 B']:NAMES,humans=mode==='duo'?2:1;
+  S={mode,deck,excluded,round:0,first:Math.floor(Math.random()*4),current:null,seen:[],log:[],over:false,table:null,
+     players:names.map((name,i)=>({name,bot:i>=humans,hand:range(1,10),revUsed:false,cards:[],shown:[],hidden:0,foldedLast:false,
+       k:0.5+Math.random()*0.3,noise:0.05+Math.random()*0.2,foldRate:0.3+Math.random()*0.4}))};
+  pending=null;ui={sel:null,rev:false};prev=[];
+  run(gameId);
+}
+function waitFor(type,who){return new Promise(res=>{pending={type,res,who};render();});}
+function done(v){const p=pending;pending=null;p.res(v);}
+async function run(id){
+  for(let r=0;r<9;r++){await playRound(id);if(id!==gameId)return;}
+  S.over=true;render();
+}
+async function playRound(id){
+  const card=S.deck[S.round];S.current=card;
+  S.table={subs:[null,null,null,null],state:['waiting','waiting','waiting','waiting'],folder:null,lowWins:null,revCount:0,showSp:false,turn:null,result:null,tiedChoice:null};
+  render();await sleep(450);if(id!==gameId)return;
+  S.table.models=[0,1,2,3].map(oppModel);
+  for(let i=0;i<4;i++){if(!S.players[i].bot)continue;S.table.subs[i]=botChoose(i);S.table.state[i]='placed';render();await sleep(220);if(id!==gameId)return;}
+  for(let h=0;h<4;h++){
+    if(S.players[h].bot)continue;
+    if(S.mode==='duo'){await waitFor('pass',h);if(id!==gameId)return;}
+    const mine=await waitFor('submit',h);if(id!==gameId)return;
+    S.table.subs[h]=mine;S.table.state[h]='placed';render();await sleep(300);
+  }
+  if(S.mode==='duo'){await waitFor('ready');if(id!==gameId)return;}
+  S.table.state=S.table.state.map(()=>'back');render();await sleep(900);if(id!==gameId)return;
+  for(let k=0;k<4;k++){
+    const i=(S.first+k)%4,p=S.players[i];
+    const ok=S.table.folder===null&&i!==S.first&&!p.foldedLast;
+    S.table.turn=i;render();
+    let fold=false;
+    if(ok){
+      if(p.bot){await sleep(550);fold=botFold(i);}
+      else{fold=await waitFor('fold',i);}
+      if(id!==gameId)return;
+    }
+    if(fold){S.table.folder=i;S.table.state[i]='folded';}else{S.table.state[i]='face';}
+    render();await sleep(600);if(id!==gameId)return;
+  }
+  S.table.turn=null;
+  S.table.revCount=S.table.subs.filter(s=>s.rev).length;
+  S.table.lowWins=S.table.revCount%2===1;S.table.showSp=true;
+  render();await sleep(700);if(id!==gameId)return;
+  const res=resolve(card,S.table.subs,S.table.folder,S.table.lowWins);
+  let recipient=res.acquirer,via=null;
+  if(card<0&&res.acquirer!==null&&res.tied.length){
+    via=res.acquirer;
+    if(S.players[via].bot){recipient=botGive(res.tied);}
+    else{S.table.tiedChoice=res.tied;recipient=await waitFor('give',via);S.table.tiedChoice=null;}
+    if(id!==gameId)return;
+  }
+  S.players.forEach((p,i)=>{
+    const s=S.table.subs[i];
+    p.hand=p.hand.filter(n=>n!==s.num);
+    if(s.rev)p.revUsed=true;
+    if(i===S.table.folder)p.hidden++;else p.shown.push(s.num);
+    p.foldedLast=i===S.table.folder;
+  });
+  if(recipient!==null)S.players[recipient].cards.push(card);
+  S.seen.push(card);
+  S.table.result={recipient,via};
+  const plays=[0,1,2,3].map(i=>{
+    const s=S.table.subs[i];
+    if(i===S.table.folder)return `${nm(i)} 포기${own(i)?`(${s.num})`:''}${s.rev?' ↺':''}`;
+    return `${nm(i)} ${s.num}${s.rev?' ↺':''}`;
+  }).join(', ');
+  S.log.unshift(`${S.round+1}라운드 ${fmt(card)}, ${S.table.lowWins?'낮은':'높은'} 숫자 우위: ${resultText()} (${plays})`);
+  await waitFor('next');if(id!==gameId)return;
+  S.round++;S.first=(S.first+1)%4;
+}
+function resultText(){
+  const r=S.table.result,c=S.current;
+  if(!r)return '';
+  if(r.recipient===null)return '혼자 낸 숫자가 없어 버려짐';
+  if(r.via!==null)return `${nm(r.via)} 획득 후 ${nm(r.recipient)}에게 넘김`;
+  if(c<0&&S.table.folder===r.recipient)return `${nm(r.recipient)} 공개 포기로 획득`;
+  return `${nm(r.recipient)} 획득`;
+}
+
+/* ---------- 화면 ---------- */
+function stageHTML(){
+  const c=S.current,t=S.table;
+  const gone=new Set([...S.seen,c]);
+  const rest=SCORE_SET.filter(v=>!gone.has(v));
+  let rule='리버스 카드 수에 따라 우위가 정해져요';
+  if(t&&t.lowWins!==null)rule=`↺ 리버스 ${t.revCount}장, ${t.lowWins?'낮은':'높은'} 숫자 우위`;
+  return `<section class="stage">
+    <div class="score ${c>0?'pos':'neg'}" aria-label="점수 카드 ${fmt(c)}"><b>${c==null?'':fmt(c)}</b></div>
+    <div class="info">
+      <div class="round">라운드 ${Math.min(S.round+1,9)} / 9</div>
+      <div class="rule">${rule}</div>
+      ${t&&t.result?`<div class="result">${resultText()}</div>`:''}
+      <div class="chips">${rest.map(v=>`<span class="chip ${v>0?'pos':'neg'}">${fmt(v)}</span>`).join('')}</div>
+      <div class="note">${S.over?`빠진 카드는 ${fmt(S.excluded)}였어요.`:'아직 안 나온 점수 카드예요. 이 중 1장은 게임에서 빠져 있어요.'}</div>
+    </div></section>`;
+}
+function spHTML(i,s){
+  if(!(S.table.showSp||own(i)))return '<div class="spcard down" aria-label="특수 카드 뒷면"></div>';
+  return s.rev?'<div class="spcard rev" aria-label="리버스"><b>↺</b><span>리버스</span></div>':'<div class="spcard norm" aria-label="노멀"><b>=</b><span>노멀</span></div>';
+}
+function slotHTML(i){
+  const t=S.table;if(!t)return '<div class="card empty"></div>';
+  const st=t.state[i],s=t.subs[i],enter=prev[i]!==undefined&&prev[i]!==st?' enter':'';
+  if(st==='waiting')return '<div class="card empty" aria-label="아직 안 냄"></div>';
+  const face=`<div class="card face${enter}" style="--c:var(--${col(s.num)})"><b>${s.num}</b></div>`;
+  let num;
+  if(st==='placed')num=own(i)?face:`<div class="card back unknown${enter}" aria-label="카드 냄"></div>`;
+  else if(st==='back')num=`<div class="card back ${col(s.num)}${enter}" aria-label="${col(s.num)==='blue'?'파랑 1~5':'노랑 6~10'}"></div>`;
+  else if(st==='folded')num=`<div class="card back ${col(s.num)}${enter}"><span class="lab">포기${own(i)?' '+s.num:''}</span></div>`;
+  else num=face;
+  return `<div class="stack">${num}${spHTML(i,s)}</div>`;
+}
+function seatsHTML(){
+  return `<section class="seats">${S.players.map((p,i)=>{
+    const turn=S.table&&S.table.turn===i;
+    return `<div class="seat${turn?' turn':''}">
+      <div class="seat-top"><span class="name">${p.name}</span><span class="total">${sum(p.cards)}</span></div>
+      <div class="tags">${i===S.first&&!S.over?'<span class="tag on">선</span>':''}<span class="tag${p.revUsed?'':' rv'}">↺ 리버스 ${p.revUsed?'씀':'남음'}</span>${p.foldedLast&&!S.over?'<span class="tag">다음 포기 불가</span>':''}</div>
+      <div class="slot">${slotHTML(i)}</div>
+      <div class="won">${p.cards.map(v=>`<span class="chip ${v>0?'pos':'neg'}">${fmt(v)}</span>`).join('')}</div>
+      <div class="used">낸 카드: ${p.shown.length||p.hidden?[...p.shown].join(' ')+(p.hidden?' ?'.repeat(p.hidden):''):'없음'}</div>
+    </div>`;}).join('')}</section>`;
+}
+function actionHTML(){
+  if(S.over){
+    const order=[0,1,2,3].sort((a,b)=>{
+      const d=sum(S.players[b].cards)-sum(S.players[a].cards);if(d)return d;
+      const ma=S.players[a].cards.length?Math.max(...S.players[a].cards):-99,mb=S.players[b].cards.length?Math.max(...S.players[b].cards):-99;
+      return mb-ma;});
+    return `<section class="action"><div class="prompt">${S.mode==='duo'?'최종 결과':order.indexOf(0)<2?'생존했어요':'탈락했어요'}</div>
+      <div class="standings">${order.map((i,r)=>`<div class="st${r<2?' alive':''}"><span>${r+1}위 ${nm(i)}</span><span>${sum(S.players[i].cards)}점 ${r<2?'생존':'탈락'}</span></div>`).join('')}</div>
+      <button class="btn primary" data-act="mode" data-m="${S.mode}">한 판 더</button></section>`;
+  }
+  const t=S.table,c=S.current;
+  if(!pending){
+    let msg='봇이 카드를 고르는 중이에요';
+    if(t&&t.turn!==null)msg=`${nm(t.turn)} 차례`;
+    else if(t&&t.state.every(s=>s==='back'))msg='뒷면 색을 공개했어요';
+    return `<section class="action"><div class="prompt">${msg}</div></section>`;
+  }
+  const who=S.mode==='duo'&&pending.who!=null?nm(pending.who)+': ':'';
+  if(pending.type==='pass')return `<section class="action"><div class="prompt">${nm(pending.who)} 차례예요</div><div class="sub">폰을 ${nm(pending.who)}에게 넘겨주세요. 다른 사람은 화면을 보지 마세요.</div><button class="btn primary" data-act="go">${nm(pending.who)} 패 보기</button></section>`;
+  if(pending.type==='ready')return `<section class="action"><div class="prompt">둘 다 냈어요</div><div class="sub">폰을 가운데 두고 같이 보세요.</div><button class="btn primary" data-act="go">공개 시작</button></section>`;
+  if(pending.type==='submit'){
+    const p=S.players[pending.who];
+    return `<section class="action"><div class="prompt">${who}낼 카드를 고르세요</div>
+      <div class="sub">점수 카드 ${fmt(c)}. ${c>0?'가져오고 싶다면 혼자 가장 우위인 숫자를 노리세요.':'가져가지 않도록 피하세요. 같은 숫자로 겹치면 떠넘겨질 수 있어요.'}</div>
+      <div class="hand">${range(1,10).map(n=>`<button class="hc${ui.sel===n?' sel':''}" style="--c:var(--${col(n)})" data-act="pick" data-n="${n}" ${p.hand.includes(n)?'':'disabled'} aria-pressed="${ui.sel===n}">${n}</button>`).join('')}</div>
+      <div class="row">
+        <button class="btn primary" data-act="submit" data-rev="0" ${ui.sel?'':'disabled'}>${ui.sel?`${ui.sel} 내기`:'숫자 카드를 고르세요'}</button>
+        <button class="btn revbtn" data-act="submit" data-rev="1" ${ui.sel&&!p.revUsed?'':'disabled'}>${p.revUsed?'↺ 리버스 사용함':ui.sel?`↺ ${ui.sel} 리버스로 내기`:'↺ 리버스로 내기'}</button>
+      </div></section>`;
+  }
+  if(pending.type==='fold'){
+    return `<section class="action"><div class="prompt">${who}앞면을 공개할까요?</div>
+      <div class="sub">${c>0?'공개를 포기하면 이번 점수 카드 획득 후보에서 빠지고, 다음 라운드엔 포기할 수 없어요.':'공개를 포기하면 이 음수 카드를 가져가요. 단, 같은 숫자를 낸 사람들이 있으면 그중 한 명에게 넘길 수 있어요.'}</div>
+      <div class="row"><button class="btn primary" data-act="fold" data-v="0">앞면 공개</button><button class="btn" data-act="fold" data-v="1">공개 포기</button></div></section>`;
+  }
+  if(pending.type==='give'){
+    return `<section class="action"><div class="prompt">${who}${fmt(c)}을 누구에게 넘길까요?</div>
+      <div class="sub">같은 숫자를 낸 사람 중 한 명에게 넘겨야 해요.</div>
+      <div class="row">${t.tiedChoice.map(j=>`<button class="btn primary" data-act="give" data-p="${j}">${nm(j)}에게 넘기기</button>`).join('')}</div></section>`;
+  }
+  if(pending.type==='next'){
+    return `<section class="action"><div class="prompt">${resultText()}</div>
+      <button class="btn primary" data-act="next">${S.round>=8?'최종 결과 보기':'다음 라운드'}</button></section>`;
+  }
+  return '';
+}
+function logHTML(){
+  if(!S.log.length)return '';
+  return `<section class="log"><h2>기록</h2><ol reversed>${S.log.map(l=>`<li>${l}</li>`).join('')}</ol></section>`;
+}
+function render(){
+  if(!S)return;
+  document.getElementById('app').innerHTML=stageHTML()+seatsHTML()+actionHTML()+logHTML();
+  prev=S.table?S.table.state.slice():[];
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+  const a=b.dataset.act;
+  if(a==='new')return showStart();
+  if(a==='mode')return newGame(b.dataset.m);
+  if(!pending)return;
+  if(a==='go'&&(pending.type==='pass'||pending.type==='ready'))return done(true);
+  if(a==='pick'&&pending.type==='submit'){ui.sel=+b.dataset.n;render();}
+  else if(a==='sp'&&pending.type==='submit'){const v=b.dataset.v==='1';if(!v||!S.players[pending.who].revUsed){ui.rev=v;render();}}
+  else if(a==='submit'&&pending.type==='submit'&&ui.sel){const v={num:ui.sel,rev:b.dataset.rev==='1'&&!S.players[pending.who].revUsed};ui={sel:null,rev:false};done(v);}
+  else if(a==='fold'&&pending.type==='fold')done(b.dataset.v==='1');
+  else if(a==='give'&&pending.type==='give')done(+b.dataset.p);
+  else if(a==='next'&&pending.type==='next')done(true);
+});
+showStart();
+</script>
+</body>
+</html>
